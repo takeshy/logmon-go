@@ -6,7 +6,7 @@ logmon by go lang
 
 ## Usage
 ```
-$ logmon-go -c sample.conf
+$ logmon-go -f sample.conf
 ```
 
 ## Config

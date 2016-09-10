@@ -1,27 +1,27 @@
 package main
 
 import (
-	"os"
-	"sync"
-	"fmt"
-	"time"
 	"flag"
-	"strings"
-	"io/ioutil"
-	"strconv"
-	"regexp"
-	"os/signal"
-	"os/exec"
-	"syscall"
+	"fmt"
 	"github.com/takeshy/tail"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"os/signal"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
 )
 
 type Watching struct {
-	Path string
-	Target *regexp.Regexp
-	Ignore *regexp.Regexp
+	Path            string
+	Target          *regexp.Regexp
+	Ignore          *regexp.Regexp
 	WaitMillisecond int64
-	Command string
+	Command         string
 }
 
 func readConf(path string) string {
@@ -36,7 +36,7 @@ func readConf(path string) string {
 func parseConf(contentStr string) []Watching {
 	contents := strings.Split(contentStr, "\n")
 	ret := []Watching{}
-	fileRe :=  regexp.MustCompile("^:(.*)")
+	fileRe := regexp.MustCompile("^:(.*)")
 	targetRe := regexp.MustCompile("^\\((.*)\\)$")
 	ignoreRe := regexp.MustCompile("^\\[(.*)\\]$")
 	timeRe := regexp.MustCompile("^{(.*)}$")
@@ -44,7 +44,7 @@ func parseConf(contentStr string) []Watching {
 	var path string
 	var target, ignore *regexp.Regexp
 	var waitMillisecond int64
-	for i:=0; i < len(contents); i++ {
+	for i := 0; i < len(contents); i++ {
 		if fileRe.MatchString(contents[i]) {
 			if target != nil || ignore != nil {
 				panic(strconv.Itoa(i) + ":format error")
@@ -74,7 +74,7 @@ func parseConf(contentStr string) []Watching {
 			if path == "" || target == nil {
 				panic(strconv.Itoa(i) + "command format error")
 			}
-			ret = append(ret, Watching{path, target,ignore, waitMillisecond, contents[i]})
+			ret = append(ret, Watching{path, target, ignore, waitMillisecond, contents[i]})
 			path = ""
 			waitMillisecond = 0
 			target = nil
@@ -90,14 +90,26 @@ func escapeShell(s string) string {
 	return message
 }
 
-func executeCommand(conf Watching, targetMessage string){
-	replaceRe :=  regexp.MustCompile("<%%%%>")
+func executeCommand(conf Watching, targetMessage string) {
+	replaceRe := regexp.MustCompile("<%%%%>")
 	command := replaceRe.ReplaceAllString(conf.Command, targetMessage)
 	_, err := exec.Command("sh", "-c", command).Output()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-1)
 	}
+}
+
+func printConf(conf Watching) {
+	fmt.Printf("Logfile: %s\n", conf.Path)
+	fmt.Printf("Message: %s\n", conf.Target)
+	if conf.Ignore != nil {
+		fmt.Printf("Ignore: %s\n", conf.Ignore)
+	}
+	if conf.WaitMillisecond != 0 {
+		fmt.Printf("WaitMillisecond: %d\n", conf.WaitMillisecond)
+	}
+	fmt.Printf("Action: %s\n", conf.Command)
 }
 
 func logMonitor(conf Watching) {
@@ -109,13 +121,13 @@ func logMonitor(conf Watching) {
 		case s := <-c:
 			if targetMessage != "" {
 				mutex.Lock()
-				if(targetMessage != ""){
+				if targetMessage != "" {
 					targetMessage += ("\n" + escapeShell(s))
 				}
 				mutex.Unlock()
 			} else if conf.Target.MatchString(s) && (conf.Ignore == nil || !conf.Ignore.MatchString(s)) {
 				targetMessage += escapeShell(s)
-				if(conf.WaitMillisecond == 0){
+				if conf.WaitMillisecond == 0 {
 					executeCommand(conf, targetMessage)
 					targetMessage = ""
 				} else {
@@ -133,17 +145,26 @@ func logMonitor(conf Watching) {
 	}
 }
 
-func main(){
+func main() {
 	conf := flag.String("f", "/etc/logmon/logmon.conf", "config file(Default: /etc/logmon/logmon.conf)")
+	check := flag.Bool("c", false, "check config")
 	flag.Parse()
 	confs := parseConf(readConf(*conf))
+	if *check {
+		fmt.Printf("Config file: %s\n", *conf)
+		for i := range confs {
+			fmt.Printf("\n")
+			printConf(confs[i])
+		}
+		return
+	}
 	for i := range confs {
 		go logMonitor(confs[i])
 	}
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan,
-	syscall.SIGINT,
-	syscall.SIGTERM,
-	syscall.SIGQUIT)
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
 	_ = <-signalChan
 }
