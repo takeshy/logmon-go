@@ -33,14 +33,17 @@ func readConf(path string) string {
 	return string(data)
 }
 
+var (
+	fileRe = regexp.MustCompile("^:(.*)")
+	targetRe = regexp.MustCompile("^\\((.*)\\)$")
+	ignoreRe = regexp.MustCompile("^\\[(.*)\\]$")
+	timeRe = regexp.MustCompile("^{(.*)}$")
+	commandRe = regexp.MustCompile("^[^#].*")
+)
+
 func parseConf(contentStr string) []Watching {
 	contents := strings.Split(contentStr, "\n")
 	ret := []Watching{}
-	fileRe := regexp.MustCompile("^:(.*)")
-	targetRe := regexp.MustCompile("^\\((.*)\\)$")
-	ignoreRe := regexp.MustCompile("^\\[(.*)\\]$")
-	timeRe := regexp.MustCompile("^{(.*)}$")
-	commandRe := regexp.MustCompile("^[^#].*")
 	var path string
 	var target, ignore *regexp.Regexp
 	var waitMillisecond int64
